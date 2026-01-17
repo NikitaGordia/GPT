@@ -27,5 +27,7 @@ validation:
   n_steps: 20  # Number of validation steps
   hellaswag: true
 
+strategy: ddp
+
 # Model compilation
 compile_model: false  # Use torch.compile

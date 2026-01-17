@@ -188,3 +188,5 @@ cython_debug/
 # VS Code
 *.code-workspace
 .vscode/
+
+lightning_logs/

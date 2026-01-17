@@ -7,7 +7,7 @@ import requests
 import torch.distributed as dist
 from tqdm import tqdm
 
-from gpt.utils import RuntimeEnvironment, configure_logger
+from gpt.utils import RuntimeEnvironment, setup_env
 
 
 def download_file(url: str, fname: str, chunk_size: int = 1024) -> None:
@@ -72,8 +72,7 @@ def cache_dataset(cfg: DictConfig) -> None:
         cfg: Hydra configuration
     """
 
-    env = RuntimeEnvironment.from_hydra_config(cfg.env)
-    configure_logger(env.ddp_rank)
+    env = setup_env(cfg.env)
 
     # Validate split
     hs_cfg = cfg.data.hellaswag

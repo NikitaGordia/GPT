@@ -160,3 +160,29 @@ def configure_logger(rank, log_dir="logs/loguru"):
         )
 
     logger.info(f"Logger configured for rank {rank}. Logging to {log_file_path}")
+
+
+def setup_env(cfg_env: DictConfig) -> RuntimeEnvironment:
+    env = RuntimeEnvironment.from_hydra_config(cfg_env)
+    configure_logger(env.ddp_rank)
+
+    logger.info("------------------------ ENVIRONMENT ------------------------")
+    logger.info(f"Using {env.device} device.")
+    if env.ddp:
+        logger.info(f"Using DDP with {env.ddp_world_size} devices.")
+    else:
+        logger.info("Not using DDP.")
+
+    if env.use_tf32:
+        torch.set_float32_matmul_precision("high")
+        logger.info("Using tf32.")
+    else:
+        logger.info("Not using tf32.")
+
+    if env.use_autocast:
+        logger.info("Using autocast.")
+    else:
+        logger.info("Not using autocast.")
+    logger.info("------------------------ ENVIRONMENT ------------------------")
+
+    return env

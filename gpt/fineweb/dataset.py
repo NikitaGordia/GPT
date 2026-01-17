@@ -59,7 +59,7 @@ class ShardBuffer:
     when exiting the context.
     """
 
-    def __init__(self, local_dir: str, shard_size: int):
+    def __init__(self, local_dir: str, shard_size: int, n_first_val_shards: int):
         """Initialize the shard buffer.
 
         Args:
@@ -70,6 +70,7 @@ class ShardBuffer:
         self.shard_size = shard_size
         self.shard_index = 0
         self.token_count = 0
+        self.n_first_val_shards = n_first_val_shards
         self.all_tokens_np = np.empty((self.shard_size,), dtype=np.uint16)
         self.progress_bar: Optional[tqdm] = None
 
@@ -87,7 +88,7 @@ class ShardBuffer:
 
     def save_shard(self) -> None:
         """Save a shard of tokens."""
-        split = "val" if self.shard_index == 0 else "train"
+        split = "val" if self.shard_index < self.n_first_val_shards else "train"
         filename = os.path.join(self.local_dir, f"edufineweb_{split}_{self.shard_index:06d}")
         write_datafile(filename, self.all_tokens_np[: self.token_count])
         logger.info(f"Saved shard {self.shard_index} to {filename}")
@@ -143,7 +144,13 @@ class FinewebProcessor:
     """Class for downloading and processing the Fineweb dataset."""
 
     def __init__(
-        self, local_dir: str, encoder: Encoding, cache_dir: str, remote_name: str, shard_size: int
+        self,
+        local_dir: str,
+        encoder: Encoding,
+        cache_dir: str,
+        remote_name: str,
+        shard_size: int,
+        n_first_val_shards: int,
     ):
         """Initialize the Fineweb processor.
 
@@ -157,6 +164,7 @@ class FinewebProcessor:
         self.cache_dir = cache_dir
         self.remote_name = remote_name
         self.shard_size = shard_size
+        self.n_first_val_shards = n_first_val_shards
         self.encoder = encoder
 
     def setup_directories(self) -> None:
@@ -175,7 +183,7 @@ class FinewebProcessor:
             return load_dataset(
                 "HuggingFaceFW/fineweb-edu",
                 name=self.remote_name,
-                split="train",
+                split="train",  # The only available split on HS
                 cache_dir=self.cache_dir,
             )
         except Exception as e:
@@ -196,7 +204,14 @@ class FinewebProcessor:
         logger.info(f"Using {nprocs} processes for tokenization")
 
         try:
-            with mp.Pool(nprocs) as pool, ShardBuffer(self.local_dir, self.shard_size) as buffer:
+            with (
+                mp.Pool(nprocs) as pool,
+                ShardBuffer(
+                    self.local_dir,
+                    self.shard_size,
+                    self.n_first_val_shards,
+                ) as buffer,
+            ):
                 for tokens in pool.imap(tokenize_with_args, dataset, chunksize=32):
                     buffer.add_tokens(tokens)
 
@@ -206,7 +221,7 @@ class FinewebProcessor:
             raise
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="config")
+@hydra.main(version_base=None, config_path="../../conf", config_name="config")
 def download_and_process(cfg: DictConfig) -> None:
     """Download and process the Fineweb dataset.
 
@@ -222,6 +237,7 @@ def download_and_process(cfg: DictConfig) -> None:
         cfg.data.hugging_face.cache_dir,
         fw_cfg.remote_name,
         fw_cfg.shard_size,
+        fw_cfg.n_first_val_shards,
     )
     processor.process()
 

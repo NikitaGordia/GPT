@@ -12,7 +12,7 @@ from torch.nn import functional as F
 from tqdm import tqdm
 from transformers import GPT2LMHeadModel
 
-from gpt.utils import RuntimeEnvironment, configure_logger
+from gpt.utils import RuntimeEnvironment, setup_env
 
 from .dataset import prepare_dataset
 
@@ -78,7 +78,7 @@ def render_example(
 
 @torch.no_grad()
 def evaluate(
-    cfg: DictConfig,
+    cfg_hellaswag: DictConfig,
     env: RuntimeEnvironment,
     model: Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]],
     encoder: Encoding,
@@ -97,8 +97,6 @@ def evaluate(
             - Number of correct predictions using sum loss
             - Number of correct predictions using normalized loss
     """
-    if env.use_tf32:
-        torch.set_float32_matmul_precision("high")
 
     num_correct_norm = 0
     num_correct = 0
@@ -106,7 +104,7 @@ def evaluate(
 
     ddp_rank, ddp_world_size = env.ddp_config
 
-    for ix, example in tqdm(enumerate(iterate_examples(cfg, env))):
+    for ix, example in tqdm(enumerate(iterate_examples(cfg_hellaswag, env))):
         if ix % ddp_world_size != ddp_rank:
             continue
 
@@ -164,6 +162,17 @@ def evaluate(
     return num_total, num_correct, num_correct_norm
 
 
+def render_results(num_total: int, num_correct: int, num_correct_norm: int) -> str:
+    return (
+        (
+            f"Total examples: {num_total}, Accuracy: {num_correct / num_total * 100:.1f}%, "
+            f"NormAccuracy: {num_correct_norm / num_total * 100:.1f}%"
+        )
+        if num_total > 0
+        else "No examples evaluated"
+    )
+
+
 @hydra.main(version_base=None, config_path="../../conf", config_name="config")
 def evaluate_pretrained(cfg: DictConfig) -> None:
     """
@@ -173,8 +182,7 @@ def evaluate_pretrained(cfg: DictConfig) -> None:
         cfg: Hydra configuration
     """
 
-    env = RuntimeEnvironment.from_hydra_config(cfg.env)
-    configure_logger(env.ddp_rank)
+    env = setup_env(cfg.env)
 
     hs_cfg = cfg.data.hellaswag
 
@@ -187,10 +195,7 @@ def evaluate_pretrained(cfg: DictConfig) -> None:
         return model(x).logits, None
 
     num_total, num_correct, num_correct_norm = evaluate(hs_cfg, env, model_fn, encoder)
-    logger.success(
-        f"Total examples: {num_total}, Accuracy: {num_correct / num_total * 100:.1f}%, "
-        f"NormAccuracy: {num_correct_norm / num_total * 100:.1f}%"
-    )
+    logger.success(render_results(num_total, num_correct, num_correct_norm))
 
 
 if __name__ == "__main__":

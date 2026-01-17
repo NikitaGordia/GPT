@@ -14,7 +14,7 @@ DOCKER_BUILDKIT=1
 ## Download and process fineweb dataset
 .PHONY: download-fineweb
 download-fineweb:
-	python -m gpt.fineweb
+	python -m gpt.fineweb.dataset
 
 ## Cache hellaswag dataset
 .PHONY: cache-hellaswag

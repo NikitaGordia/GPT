@@ -47,7 +47,7 @@ download_fineweb_data() {
   log "Downloading Fineweb dataset..."
 
   # Use the Python module to download the dataset
-  if python -m gpt.fineweb; then
+  if python -m gpt.fineweb.dataset; then
     success "Fineweb dataset downloaded successfully"
     return 0
   else
